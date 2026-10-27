@@ -259,6 +259,12 @@ button{font:inherit; color:inherit}
 .flash-num.count{font-size:2.4rem; opacity:.6}
 .flash-num.msg{font-size:2rem}
 .flash-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:22px; width:100%; align-items:start}
+.practice-host:empty{display:none}
+.practice{display:grid; gap:12px; padding-top:18px; border-top:2px dashed var(--line)}
+.practice-title{font-size:1.35rem}
+.mv.big{font-size:1rem; padding:4px 12px}
+.mv.cur{border-color:var(--ink); color:var(--ink)}
+.run-total{font-weight:700}
 
 /* ---------- boulier (SVG) ---------- */
 .sb-svg{display:block; width:100%; height:auto; margin:0 auto; touch-action:manipulation; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none}
@@ -998,6 +1004,75 @@ function recipeTable(head, rows){
     h('tbody',{}, rows.map(r => h('tr',{}, r.map(c => h('td',{}, c)))))));
 }
 
+/* --- Flash anzan : après une erreur, on refait le calcul sur un boulier --- */
+function flashPractice(nums){
+  const sums = nums.reduce((acc,n) => { acc.push(acc[acc.length-1] + n); return acc; }, [0]);
+  const total = sums[sums.length-1];
+  const rods = Math.max(2, String(total).length + 1);
+  let k = 0, playing = false, run = 0;
+  const chips = h('div',{class:'mvs', 'aria-label':'Les nombres à ajouter'});
+  const totalEl = h('p',{class:'run-total'});
+  const fb = h('p',{class:'fb', 'aria-live':'polite'});
+  const list = h('ol',{class:'plan'}); list.hidden = true;
+  const host = h('div',{class:'sb-host'});
+  const el = h('div',{class:'practice'});
+  const drawChips = (cur=k) => {
+    chips.replaceChildren(...nums.map((n,i) => h('span',{class:'mv big'+(i<cur?' on':'')+(i===cur?' cur':'')}, (i ? '+ ' : '') + fmt(n))));
+    totalEl.textContent = fr(cur === 0 ? `Pose ${fmt(nums[0])} sur le boulier.`
+      : cur < nums.length ? `Le boulier montre ${fmt(sums[cur])}. Ajoute ${fmt(nums[cur])}.` : `Total : ${fmt(total)}`);
+  };
+  const sb = new Soroban(host, {rods, value:0, labels:true, digits:true, onChange:v => {
+    if (playing || k >= nums.length) return;
+    if (v === sums[k+1]){
+      k++; drawChips(); list.hidden = true;
+      if (k === nums.length){
+        sb.lock(true); fb.className = 'fb good';
+        fb.textContent = fr(`Bravo ! ${nums.map(fmt).join(' + ')} = ${fmt(total)}. Relance un flash quand tu veux.`);
+      } else {
+        fb.className = 'fb good'; fb.textContent = fr(`Oui, ${fmt(sums[k])}. Au suivant !`);
+      }
+    } else { fb.className = 'fb'; fb.textContent = ''; }
+  }});
+  const alive = my => () => my === run && document.contains(el);
+  const hintBtn = h('button',{class:'btn', type:'button', onclick:() => {
+    if (playing || k >= nums.length) return;
+    run++; sb.setValue(sums[k]); sb.lock(false);
+    const p = makePlan(sums[k], '+', nums[k], rods);
+    renderPlanList(list, p.groups, -1); list.hidden = false;
+    sb.highlight(p.groups.length ? p.groups[0].pos : null);
+    fb.className = 'fb'; fb.textContent = fr(`Pour ajouter ${fmt(nums[k])} à ${fmt(sums[k])} :`);
+  }}, 'Indice');
+  const showBtn = h('button',{class:'btn', type:'button', onclick: async () => {
+    if (playing) return;
+    const my = ++run; playing = true; sb.lock(true);
+    hintBtn.disabled = showBtn.disabled = resetBtn.disabled = true;
+    list.hidden = false; fb.className = 'fb'; fb.textContent = 'Regarde bien…';
+    for (let i=0; i<nums.length; i++){
+      drawChips(i);
+      const ok = await playPlan(sb, makePlan(sums[i], '+', nums[i], rods), list, alive(my));
+      if (!ok) return;
+    }
+    drawChips(nums.length);
+    fb.textContent = fr(`${nums.map(fmt).join(' + ')} = ${fmt(total)}.`);
+    await wait(1600);
+    if (!alive(my)()) return;
+    playing = false; k = 0; sb.setValue(0); sb.highlight(null); sb.lock(false); drawChips(); list.hidden = true;
+    hintBtn.disabled = showBtn.disabled = resetBtn.disabled = false;
+    fb.textContent = 'À toi maintenant : refais-le en entier.';
+  }}, 'Montre-moi');
+  const resetBtn = h('button',{class:'btn ghost', type:'button', onclick:() => {
+    if (playing) return;
+    run++; k = 0; sb.setValue(0); sb.highlight(null); sb.lock(false); drawChips(); list.hidden = true; fb.textContent = '';
+  }}, 'Recommencer');
+  drawChips();
+  el.append(
+    h('h3',{class:'practice-title'}, 'On le refait sur le boulier'),
+    h('p',{class:'muted'}, `Pose d'abord ${fmt(nums[0])}, puis ajoute les autres nombres un par un. Le nombre suivant s'allume dès que le boulier est juste.`),
+    chips,
+    h('div',{class:'round-grid'}, host, h('div',{class:'round-side'}, totalEl, h('div',{class:'btns'}, hintBtn, showBtn, resetBtn), fb, list)));
+  return el;
+}
+
 /* --- Flash anzan --- */
 function makeFlash(){
   const opt = {digits:1, count:3, speed:1300};
@@ -1014,11 +1089,15 @@ function makeFlash(){
   const result = h('p',{class:'fb', 'aria-live':'polite'});
   const tally = h('p',{class:'small-note'}, 'Pas encore de partie.');
   const startBtn = h('button',{class:'btn primary', type:'button'}, 'Partir');
+  const practiceHost = h('div',{class:'practice-host'});
   const kp = makeKeypad({maxLen:4, label:'Le total', onSubmit:v => {
     kp.enable(false); tries++;
     const total = nums.reduce((a,b) => a+b, 0), expr = nums.map(fmt).join(' + ');
-    if (v===total){ wins++; result.className='fb good'; result.textContent = fr(`Bravo ! ${expr} = ${fmt(total)}`); }
-    else { result.className='fb bad'; result.textContent = fr(`Le total était ${fmt(total)} : ${expr}. Tu as répondu ${fmt(v)}.`); }
+    if (v===total){ wins++; result.className='fb good'; result.textContent = fr(`Bravo ! ${expr} = ${fmt(total)}`); practiceHost.replaceChildren(); }
+    else {
+      result.className='fb bad'; result.textContent = fr(`Le total était ${fmt(total)} : ${expr}. Tu as répondu ${fmt(v)}.`);
+      practiceHost.replaceChildren(flashPractice(nums.slice()));
+    }
     numEl.className='flash-num'; numEl.textContent = fmt(total);
     tally.textContent = fr(`Cette fois-ci : ${wins} réussi${wins>1?'s':''} sur ${tries}.`);
     startBtn.disabled = false; startBtn.textContent = 'Encore';
@@ -1033,6 +1112,7 @@ function makeFlash(){
   startBtn.addEventListener('click', async () => {
     if (running) return;
     running = true; startBtn.disabled = true; kp.enable(false); kp.clear(); result.textContent=''; result.className='fb';
+    practiceHost.replaceChildren();
     nums = gen();
     for (const c of ['3','2','1']){ numEl.className='flash-num count'; numEl.textContent=c; await wait(550); }
     numEl.textContent=''; await wait(300);
@@ -1047,7 +1127,8 @@ function makeFlash(){
       seg('Chiffres', 'digits', [[1,'1 chiffre'],[2,'2 chiffres']]),
       seg('Nombres', 'count', [[3,'3'],[5,'5'],[8,'8']]),
       seg('Vitesse', 'speed', [[1300,'Lente'],[900,'Moyenne'],[600,'Rapide']])),
-    h('div',{class:'flash-row'}, h('div',{class:'round-side'}, screen, h('div',{class:'btns'}, startBtn), result, tally), kp.el));
+    h('div',{class:'flash-row'}, h('div',{class:'round-side'}, screen, h('div',{class:'btns'}, startBtn), result, tally), kp.el),
+    practiceHost);
 }
 
 /* =========================================================
