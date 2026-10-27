@@ -1691,7 +1691,9 @@ function paceSection(){
 }
 
 const view = $('#view');
-const isLocked = l => !!l.lock && !Store.defiDone();
+let forceOpen = false;   // adresse d'essai : #essai-multiplier, #essai-diviser
+const isLocked = l => !!l.lock && !forceOpen && !Store.defiDone() && !Store.load().parentOpen;
+const ESSAI = {'essai-multiplier':'etape-8', 'essai-diviser':'etape-9'};
 let pendingAnchor = null;
 function goDefi(){ pendingAnchor = 'defi'; go('etape-7'); }
 const LOCK_SVG = '<svg class="lock-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>';
@@ -1830,6 +1832,8 @@ function restoreScroll(y){
 }
 function show(route){
   activeKeypad = null;
+  forceOpen = !!ESSAI[route];
+  if (forceOpen) route = ESSAI[route];
   const resume = pendingResume; pendingResume = false;
   const l = LESSONS.find(x => x.id === route);
   if (l){
@@ -1843,8 +1847,9 @@ function show(route){
   } else if (route === 'ouvrir-les-etapes'){
     /* Ouverture parent : #ouvrir-les-etapes ouvre les étapes 8 et 9 pour le joueur choisi */
     const d = Store.cur() ? Store.defi() : null;
-    if (d){ d.done = true; Store.save(); }
-    location.hash = '';
+    if (d) d.done = true; else Store.load().parentOpen = true;
+    Store.save();
+    location.hash = 'etape-8';
   } else {
     renderHome(); refreshTotal(); window.scrollTo(0,0);
   }
