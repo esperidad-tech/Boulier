@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Apprendre le boulier japonais (soroban) et le calcul mental anzan en 7 étapes, avec des petits jeux.">
+<meta name="description" content="Apprendre le boulier japonais (soroban) et le calcul mental anzan en 9 étapes, avec des petits jeux.">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>L'école du boulier</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -304,6 +304,19 @@ button{font:inherit; color:inherit}
 .flash-num.msg{font-size:2rem}
 .flash-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:22px; width:100%; align-items:start}
 .practice-host:empty{display:none}
+.qrow{font:800 1.5rem var(--f-display); font-variant-numeric:tabular-nums}
+.flash-num.neg{color:var(--sky-hi)}
+.defi{border-color:var(--earth)}
+.defi-status{display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px}
+.defi-beads span{width:30px; height:18px}
+.lock-ico{width:1em; height:1em; vertical-align:-.12em}
+.lock-ico rect, .lock-ico path{fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round}
+.step.locked .step-bead{filter:grayscale(1); opacity:.55}
+.step.locked .step-title{color:var(--muted)}
+.lstep button.locked span{opacity:.45}
+.lockbox{display:grid; gap:12px; justify-items:start; background:var(--surface); border:2px dashed var(--line); border-radius:22px; padding:22px}
+.lockbox > .lock-ico{width:34px; height:34px; color:var(--muted)}
+.qdigits{letter-spacing:.12em; color:var(--jade)}
 .practice{display:grid; gap:12px; padding-top:18px; border-top:2px dashed var(--line)}
 .practice-title{font-size:1.35rem}
 .mv.big{font-size:1rem; padding:4px 12px}
@@ -444,6 +457,8 @@ const Store = {
   setStars(lid, n){ const p=this.player(); if (!p) return; p.stars[lid] = Math.max(p.stars[lid]||0, n); this.save(); },
   total(id){ const p=this.peek(id); return p ? LESSONS.reduce((sum,l) => sum + (p.stars[l.id]||0), 0) : 0; },
   game(key){ const p=this.player(); return p ? (p.games[key] || null) : null; },
+  defi(){ const p=this.player(); return p ? (p.defi || (p.defi = {streak:0, done:false})) : null; },
+  defiDone(id=this.cur()){ const p = id ? this.peek(id) : null; return !!(p && p.defi && p.defi.done); },
   setGame(key, v){ const p=this.player(); if (!p) return; if (v) p.games[key] = v; else delete p.games[key]; this.save(); }
 };
 
@@ -623,7 +638,46 @@ function planSub(st, pos, d, out, depth=0){
   if (!planSub(st, pos+1, 1, out, depth+1)) return false;
   return planAdd(st, pos, c, out, depth+1);
 }
+const OPSYM = {'+':'+', '-':MINUS, '×':'×', '÷':'÷'};
+const OPNAME = {'+':'plus', '-':'moins', '×':'fois', '÷':'divisé par'};
+/* Multiplier : on ajoute chaque produit des tables (toujours 2 chiffres) sur 2 tiges, de gauche à droite */
+function multPlan(a, m, rods){
+  const ds = String(a); rods = Math.max(rods||0, ds.length+1);
+  const st = stFromValue(0, rods), groups = []; let ok = true;
+  for (let k=0; k<ds.length && ok; k++){
+    const digit = +ds[k], pos = ds.length-1-k, prod = digit*m, two = String(prod).padStart(2,'0');
+    groups.push({type:'head', pos:pos+1, depth:0, moves:[],
+      text: prod ? `${digit} × ${m} = ${two}. J'ajoute ${two} sur les tiges ${PLACE[pos+1]} et ${PLACE[pos]}.` : `${digit} × ${m} = 0. Rien à ajouter.`});
+    const t = Math.floor(prod/10), u = prod%10;
+    if (t) ok = planAdd(st, pos+1, t, groups, 1) && ok;
+    if (u) ok = planAdd(st, pos, u, groups, 1) && ok;
+  }
+  return {ok: ok && valueOf(st)===a*m, groups, result:a*m, a, b:m, op:'×', rods, start:0};
+}
+/* Diviser : de gauche à droite, combien de fois d rentre, puis on enlève le produit */
+function divSteps(D, d){
+  const ds = String(D), n = ds.length, out = []; let r = 0;
+  for (let k=0; k<n; k++){ const pos = n-1-k; r = r*10 + (+ds[k]); const q = Math.floor(r/d); out.push({pos, part:r, q, sub:q*d}); r -= q*d; }
+  const f = out.findIndex(x => x.q > 0);
+  return out.slice(f < 0 ? n-1 : f);
+}
+const whereSub = (sub, pos) => sub < 10 ? `sur la ${rodName(pos)}` : `sur les tiges ${PLACE[pos+1]} et ${PLACE[pos]}`;
+function divPlan(D, d, rods){
+  rods = Math.max(rods||0, String(D).length);
+  const st = stFromValue(D, rods), groups = [], steps = divSteps(D, d); let ok = true;
+  steps.forEach(x => {
+    groups.push({type:'head', pos:x.pos, depth:0, moves:[], q:x.q,
+      text: x.q ? `Combien de fois ${d} dans ${x.part} ? ${x.q} fois. J'écris ${x.q} au résultat et j'enlève ${x.q} × ${d} = ${x.sub} ${whereSub(x.sub, x.pos)}.`
+               : `${x.part} est plus petit que ${d} : j'écris 0 au résultat.`});
+    const t = Math.floor(x.sub/10), u = x.sub%10;
+    if (t) ok = planSub(st, x.pos+1, t, groups, 1) && ok;
+    if (u) ok = planSub(st, x.pos, u, groups, 1) && ok;
+  });
+  return {ok: ok && valueOf(st)===0 && D % d === 0, groups, result:D/d, a:D, b:d, op:'÷', rods, start:D, steps};
+}
 function makePlan(a, op, b, rods){
+  if (op==='×') return multPlan(a, b, rods);
+  if (op==='÷') return divPlan(a, b, rods);
   const st = stFromValue(a, rods), groups = [];
   let ok = true;
   for (let pos=String(b).length-1; pos>=0 && ok; pos--){
@@ -631,7 +685,7 @@ function makePlan(a, op, b, rods){
     ok = op==='+' ? planAdd(st,pos,d,groups) : planSub(st,pos,d,groups);
   }
   const result = op==='+' ? a+b : a-b;
-  return {ok: ok && valueOf(st)===result, groups, result, a, b, op, rods};
+  return {ok: ok && valueOf(st)===result, groups, result, a, b, op, rods, start:a};
 }
 function genProblem(cfg, seen){
   for (let t=0;t<3000;t++){
@@ -660,13 +714,14 @@ function renderPlanList(list, groups, active=-1, upto=groups.length){
       g.moves.length ? h('span',{class:'mvs'}, g.moves.map((m,mi) => h('span',{class:'mv'+(gi<active?' on':''), 'data-mi':mi}, moveLabel(m)))) : null
     )));
 }
-async function playPlan(sb, p, list, alive){
-  sb.setValue(p.a); renderPlanList(list, p.groups, -1);
+async function playPlan(sb, p, list, alive, onGroup){
+  sb.setValue(p.start ?? p.a); renderPlanList(list, p.groups, -1);
   await wait(500);
   for (let gi=0; gi<p.groups.length; gi++){
     if (!alive()) return false;
     const g = p.groups[gi];
     renderPlanList(list, p.groups, gi);
+    if (onGroup) onGroup(g, gi);
     sb.highlight(g.pos);
     await wait(g.moves.length ? 1000 : 1500);
     for (let mi=0; mi<g.moves.length; mi++){
@@ -890,17 +945,20 @@ function friendRound(api, n, base, showDots){
 /* --- Manche : calcul guidé sur le boulier --- */
 function guidedRound(api, p){
   let helped=false, solved=false, playing=false, hintIdx=0;
-  const opTxt = p.op==='+' ? '+' : MINUS;
+  const opTxt = OPSYM[p.op], start = p.start ?? p.a;
   const ansEl = h('span',{class:'ans'}, '?');
   const fb = h('p',{class:'fb', 'aria-live':'polite'});
   const steps = h('ol',{class:'plan'}); steps.hidden = true;
   const host = h('div',{class:'sb-host'});
   const verb = p.op==='+' ? 'Ajoute' : 'Enlève';
+  const askTxt = p.op==='×'
+    ? `Le boulier est vide. Multiplie chaque chiffre de ${fmt(p.a)} par ${p.b}, de gauche à droite, et ajoute chaque résultat sur le boulier.`
+    : `Le boulier montre déjà ${fmt(p.a)}. ${verb} ${fmt(p.b)} en bougeant les perles${p.b>=10?', en commençant par la gauche':''}.`;
   api.body.append(
-    h('div',{class:'problem', role:'img', 'aria-label':`${p.a} ${p.op==='+'?'plus':'moins'} ${p.b}`}, h('span',{},fmt(p.a)), h('span',{class:'op'},opTxt), h('span',{},fmt(p.b)), h('span',{class:'op'},'='), ansEl),
-    h('p',{class:'ask small'}, `Le boulier montre déjà ${fmt(p.a)}. ${verb} ${fmt(p.b)} en bougeant les perles${p.b>=10?', en commençant par la gauche':''}.`)
+    h('div',{class:'problem', role:'img', 'aria-label':`${p.a} ${OPNAME[p.op]} ${p.b}`}, h('span',{},fmt(p.a)), h('span',{class:'op'},opTxt), h('span',{},fmt(p.b)), h('span',{class:'op'},'='), ansEl),
+    h('p',{class:'ask small'}, askTxt)
   );
-  const sb = new Soroban(host, {rods:p.rods, value:p.a, labels:true, digits:true, onChange:v => {
+  const sb = new Soroban(host, {rods:p.rods, value:start, labels:true, digits:true, onChange:v => {
     if (solved || playing) return;
     fb.textContent=''; fb.className='fb';
     if (v === p.result){
@@ -929,14 +987,126 @@ function guidedRound(api, p){
     fb.textContent = `${fmt(p.a)} ${opTxt} ${fmt(p.b)} = ${fmt(p.result)}.`;
     await wait(1400);
     if (!api.alive()) return;
-    sb.setValue(p.a); sb.highlight(null); sb.lock(false); playing = false;
+    sb.setValue(start); sb.highlight(null); sb.lock(false); playing = false;
     hintBtn.disabled = hintIdx >= p.groups.length; showBtn.disabled = resetBtn.disabled = false;
     fb.textContent = 'À toi maintenant : refais-le toi-même sur le boulier.';
   }}, 'Montre-moi');
-  const resetBtn = h('button',{class:'btn ghost', type:'button', onclick:() => { if (playing||solved) return; sb.setValue(p.a); fb.textContent=''; }}, 'Recommencer');
+  const resetBtn = h('button',{class:'btn ghost', type:'button', onclick:() => { if (playing||solved) return; sb.setValue(start); fb.textContent=''; }}, 'Recommencer');
   const nextBtn = h('button',{class:'btn primary', type:'button', onclick:() => api.next()}, 'Suivant');
   const tools = h('div',{class:'btns'}, hintBtn, showBtn, resetBtn);
   api.body.append(h('div',{class:'round-grid'}, host, h('div',{class:'round-side'}, tools, fb, steps)));
+}
+/* --- Manche : les tables de multiplication --- */
+function tableRound(api, a, b){
+  let missed = false;
+  const fb = h('p',{class:'fb', 'aria-live':'polite'});
+  const ansEl = h('span',{class:'ans'}, '?');
+  const kp = makeKeypad({maxLen:2, onSubmit:v => {
+    if (v === a*b){ kp.enable(false); ansEl.textContent = a*b; ansEl.classList.add('ok'); fb.className='fb good'; fb.textContent = missed ? `Voilà : ${a} × ${b} = ${a*b}.` : 'Bravo !'; api.done(!missed, {auto:true, delay:1000}); }
+    else if (!missed){ missed = true; kp.clear(); fb.className='fb bad'; fb.textContent = `Non, pas ${v}. Essaie encore.`; }
+    else { kp.enable(false); ansEl.textContent = a*b; fb.className='fb bad'; fb.textContent = fr(`C'était ${a*b}. Retiens-le : ${a} × ${b} = ${a*b}.`); api.done(false, {auto:true, delay:2200}); }
+  }});
+  api.body.append(h('div',{class:'round-grid'},
+    h('div',{class:'round-side'}, h('div',{class:'problem', role:'img', 'aria-label':`${a} fois ${b}`}, h('span',{},a), h('span',{class:'op'},'×'), h('span',{},b), h('span',{class:'op'},'='), ansEl), fb),
+    kp.el));
+}
+/* --- Manche : diviser sur le boulier --- */
+function divRound(api, D, d){
+  const steps = divSteps(D, d), Q = D/d, rods = Math.max(2, String(D).length);
+  const after = []; { let v = D; steps.forEach(x => { v -= x.sub*10**x.pos; after.push(v); }); }
+  let si = 0, phase = 'choose', missed = false, helped = false, playing = false, solved = false, qStr = '';
+  const ansEl = h('span',{class:'ans'}, '?');
+  const qEl = h('span',{class:'qdigits'});
+  const prompt = h('p',{class:'ask'});
+  const fb = h('p',{class:'fb', 'aria-live':'polite'});
+  const list = h('ol',{class:'plan'}); list.hidden = true;
+  const host = h('div',{class:'sb-host'});
+  const ch = h('div',{class:'choices', role:'group', 'aria-label':'Combien de fois ?'});
+  const sb = new Soroban(host, {rods, value:D, labels:true, digits:true, onChange:v => {
+    if (playing || solved || phase !== 'subtract') return;
+    if (v === after[si]){ fb.className='fb good'; fb.textContent = 'Oui !'; nextStep(); }
+  }});
+  const drawQ = () => qEl.textContent = qStr + '_'.repeat(Math.max(0, steps.length - qStr.length));
+  const draw = () => {
+    drawQ(); list.hidden = true;
+    if (solved) { prompt.textContent = ''; ch.hidden = true; return; }
+    const x = steps[si];
+    if (phase === 'choose'){
+      prompt.textContent = fr(x.part < 10 && x.pos >= 0 ? `Regarde la ${rodName(x.pos)} : combien de fois ${d} dans ${x.part} ?`
+        : `Regarde les tiges ${PLACE[x.pos+1]} et ${PLACE[x.pos]} : combien de fois ${d} dans ${x.part} ?`);
+      ch.hidden = false; sb.lock(true); sb.highlight(x.pos);
+      ch.querySelectorAll('button').forEach(b => { b.disabled = false; b.className = 'choice'; });
+    } else {
+      prompt.textContent = fr(`Enlève ${x.q} × ${d} = ${x.sub} ${whereSub(x.sub, x.pos)}.`);
+      ch.hidden = true; sb.lock(false); sb.highlight(x.pos);
+    }
+  };
+  const nextStep = () => {
+    si++;
+    if (si >= steps.length){
+      solved = true; sb.lock(true); sb.highlight(null); drawQ();
+      ansEl.textContent = fmt(Q); ansEl.classList.add('ok');
+      fb.className='fb good'; fb.textContent = fr(`${helped||missed ? "C'est ça" : 'Bravo'} ! ${fmt(D)} ÷ ${d} = ${fmt(Q)}. Le boulier est vide : la division tombe juste.`);
+      tools.replaceChildren(nextBtn); draw(); api.done(!missed && !helped); nextBtn.focus({preventScroll:true});
+    } else { phase = 'choose'; draw(); }
+  };
+  for (let q=0; q<=9; q++){
+    const b = h('button',{class:'choice', type:'button', onclick:() => {
+      if (playing || solved || phase !== 'choose') return;
+      const x = steps[si];
+      if (q === x.q){
+        qStr += q; fb.className='fb good';
+        if (x.sub === 0){ fb.textContent = fr(`Oui : ${x.part} est plus petit que ${d}, on écrit 0.`); nextStep(); }
+        else { fb.textContent = fr(`Oui : ${q} × ${d} = ${x.sub}.`); phase = 'subtract'; draw(); }
+      } else {
+        missed = true; b.classList.add('wrong'); b.disabled = true; fb.className='fb bad';
+        fb.textContent = fr(q*d > x.part ? `Trop grand : ${q} × ${d} = ${q*d}, c'est plus que ${x.part}.`
+          : `Trop petit : ${q} × ${d} = ${q*d}. Il reste ${x.part - q*d}, il y a encore de la place pour un ${d}.`);
+      }
+    }}, q);
+    ch.append(b);
+  }
+  const hintBtn = h('button',{class:'btn', type:'button', onclick:() => {
+    if (playing || solved) return;
+    helped = true; const x = steps[si];
+    if (phase === 'choose'){
+      const ms = []; for (let k=1; k<=9; k++){ ms.push(`${k} × ${d} = ${k*d}`); if (k*d > x.part) break; }
+      fb.className='fb'; fb.textContent = fr(`La table de ${d} : ${ms.join(' · ')}. Prends le plus grand qui ne dépasse pas ${x.part}.`);
+    } else {
+      const st = stFromValue(si ? after[si-1] : D, rods), gs = [];
+      const t = Math.floor(x.sub/10), u = x.sub%10;
+      if (t) planSub(st, x.pos+1, t, gs); if (u) planSub(st, x.pos, u, gs);
+      sb.setValue(si ? after[si-1] : D); renderPlanList(list, gs, -1); list.hidden = false;
+      fb.className='fb'; fb.textContent = 'Voici comment faire :';
+    }
+  }}, 'Indice');
+  const showBtn = h('button',{class:'btn', type:'button', onclick: async () => {
+    if (playing || solved) return;
+    helped = true; playing = true; ch.hidden = true; sb.lock(true); list.hidden = false;
+    hintBtn.disabled = showBtn.disabled = resetBtn.disabled = true;
+    qStr = ''; drawQ(); fb.className='fb'; fb.textContent = 'Regarde bien…';
+    const p = divPlan(D, d, rods);
+    const ok = await playPlan(sb, p, list, api.alive, g => { if (g.q != null){ qStr += g.q; drawQ(); } });
+    if (!ok || !api.alive()) return;
+    fb.textContent = fr(`${fmt(D)} ÷ ${d} = ${fmt(Q)}.`);
+    await wait(1600);
+    if (!api.alive()) return;
+    playing = false; si = 0; phase = 'choose'; qStr = ''; sb.setValue(D);
+    hintBtn.disabled = showBtn.disabled = resetBtn.disabled = false;
+    draw(); fb.textContent = 'À toi maintenant : refais-le toi-même.';
+  }}, 'Montre-moi');
+  const resetBtn = h('button',{class:'btn ghost', type:'button', onclick:() => {
+    if (playing || solved) return;
+    si = 0; phase = 'choose'; qStr = ''; sb.setValue(D); fb.textContent = ''; draw();
+  }}, 'Recommencer');
+  const nextBtn = h('button',{class:'btn primary', type:'button', onclick:() => api.next()}, 'Suivant');
+  const tools = h('div',{class:'btns'}, hintBtn, showBtn, resetBtn);
+  api.body.append(
+    h('div',{class:'problem', role:'img', 'aria-label':`${D} divisé par ${d}`}, h('span',{},fmt(D)), h('span',{class:'op'},'÷'), h('span',{},d), h('span',{class:'op'},'='), ansEl),
+    h('p',{class:'ask small'}, `Le boulier montre ${fmt(D)}. On divise de gauche à droite : on cherche combien de fois ${d} rentre, on l'écrit au résultat, puis on l'enlève du boulier.`),
+    h('div',{class:'round-grid'}, host, h('div',{class:'round-side'},
+      h('p',{class:'qrow'}, 'Résultat : ', qEl), prompt, ch, fb, tools, list)));
+  draw();
 }
 /* --- Manche : la photo du boulier (anzan) --- */
 function photoRound(api, target, ms){
@@ -1015,18 +1185,19 @@ function makeDemo(examples, rods=3){
   const playBtn = h('button',{class:'btn primary', type:'button'}, 'Montre-moi');
   const tabs = h('div',{class:'chips', role:'group', 'aria-label':'Choisis un exemple'});
   const el = h('div',{class:'fig'});
-  const drawProb = done => probEl.replaceChildren(h('span',{},fmt(p.a)), h('span',{class:'op'}, p.op==='+'?'+':MINUS), h('span',{},fmt(p.b)), h('span',{class:'op'},'='), h('span',{class:'ans'+(done?' ok':'')}, done?fmt(p.result):'?'));
+  let partial = '';
+  const drawProb = done => probEl.replaceChildren(h('span',{},fmt(p.a)), h('span',{class:'op'}, OPSYM[p.op]), h('span',{},fmt(p.b)), h('span',{class:'op'},'='), h('span',{class:'ans'+(done?' ok':'')}, done ? fmt(p.result) : (partial || '?')));
   const select = i => {
     cur = i; run++;
     const ex = examples[i]; p = makePlan(ex.a, ex.op, ex.b, rods);
-    sb.setValue(p.a); sb.highlight(null); renderPlanList(list, p.groups, -1); drawProb(false);
+    partial = ''; sb.setValue(p.start ?? p.a); sb.highlight(null); renderPlanList(list, p.groups, -1); drawProb(false);
     playBtn.disabled = false; playBtn.textContent = 'Montre-moi';
     tabs.querySelectorAll('button').forEach((b,k) => b.setAttribute('aria-pressed', k===i ? 'true' : 'false'));
   };
-  examples.forEach((ex,i) => tabs.append(h('button',{class:'chip', type:'button', 'aria-pressed':'false', onclick:() => select(i)}, ex.label || `${ex.a} ${ex.op==='+'?'+':MINUS} ${ex.b}`)));
+  examples.forEach((ex,i) => tabs.append(h('button',{class:'chip', type:'button', 'aria-pressed':'false', onclick:() => select(i)}, ex.label || `${ex.a} ${OPSYM[ex.op]} ${ex.b}`)));
   playBtn.addEventListener('click', async () => {
-    const my = ++run; playBtn.disabled = true; drawProb(false);
-    const ok = await playPlan(sb, p, list, () => my===run && document.contains(el));
+    const my = ++run; playBtn.disabled = true; partial = ''; drawProb(false);
+    const ok = await playPlan(sb, p, list, () => my===run && document.contains(el), g => { if (g.q != null){ partial += g.q; drawProb(false); } });
     if (ok){ drawProb(true); playBtn.disabled = false; playBtn.textContent = 'Revoir'; }
   });
   el.append(h('div',{class:'demo'}, h('div',{class:'demo-side'}, tabs, probEl, host), h('div',{class:'demo-side'}, h('div',{class:'btns'}, playBtn), list)));
@@ -1049,10 +1220,35 @@ function recipeTable(head, rows){
 }
 
 /* --- Flash anzan : après une erreur, on refait le calcul sur un boulier --- */
+/* Flash : nombres signés (les négatifs sont à enlever) */
+function genFlash(o){
+  const lo = o.digits===1 ? 1 : 10, hi = o.digits===1 ? 9 : 99;
+  for (let t=0; t<300; t++){
+    const out = []; let tot = 0, prev = null, guard = 0;
+    while (out.length < o.count && guard++ < 500){
+      let n = rand(lo, hi);
+      if (o.minus && out.length > 0 && Math.random() < 0.45 && tot - n >= 0) n = -n;
+      if (n === prev) continue;
+      out.push(n); tot += n; prev = n;
+    }
+    if (out.length === o.count && (!o.minus || out.some(n => n < 0))) return out;
+  }
+  return [rand(lo,hi), rand(lo,hi), rand(lo,hi)];
+}
+const flashExpr = nums => nums.map((n,i) => i===0 ? fmt(n) : n < 0 ? `${MINUS} ${fmt(-n)}` : `+ ${fmt(n)}`).join(' ');
+const flashShow = n => n < 0 ? `${MINUS}${fmt(-n)}` : fmt(n);
+async function runFlash(numEl, nums, speed){
+  for (const c of ['3','2','1']){ numEl.className='flash-num count'; numEl.textContent=c; await wait(550); }
+  numEl.textContent=''; await wait(300);
+  for (const n of nums){ numEl.className='flash-num'+(n<0?' neg':''); numEl.textContent = flashShow(n); await wait(speed); numEl.textContent=''; await wait(180); }
+  numEl.className='flash-num msg'; numEl.textContent='Combien ?';
+}
+
 function flashPractice(nums){
   const sums = nums.reduce((acc,n) => { acc.push(acc[acc.length-1] + n); return acc; }, [0]);
   const total = sums[sums.length-1];
-  const rods = Math.max(2, String(total).length + 1);
+  const rods = Math.max(2, String(Math.max(...sums)).length + 1);
+  const stepPlan = i => makePlan(sums[i], nums[i] < 0 ? '-' : '+', Math.abs(nums[i]), rods);
   let k = 0, playing = false, run = 0;
   const chips = h('div',{class:'mvs', 'aria-label':'Les nombres à ajouter'});
   const totalEl = h('p',{class:'run-total'});
@@ -1061,9 +1257,9 @@ function flashPractice(nums){
   const host = h('div',{class:'sb-host'});
   const el = h('div',{class:'practice'});
   const drawChips = (cur=k) => {
-    chips.replaceChildren(...nums.map((n,i) => h('span',{class:'mv big'+(i<cur?' on':'')+(i===cur?' cur':'')}, (i ? '+ ' : '') + fmt(n))));
+    chips.replaceChildren(...nums.map((n,i) => h('span',{class:'mv big'+(i<cur?' on':'')+(i===cur?' cur':'')}, (i ? (n<0 ? MINUS+' ' : '+ ') : '') + fmt(Math.abs(n)))));
     totalEl.textContent = fr(cur === 0 ? `Pose ${fmt(nums[0])} sur le boulier.`
-      : cur < nums.length ? `Le boulier montre ${fmt(sums[cur])}. Ajoute ${fmt(nums[cur])}.` : `Total : ${fmt(total)}`);
+      : cur < nums.length ? `Le boulier montre ${fmt(sums[cur])}. ${nums[cur] < 0 ? 'Enlève' : 'Ajoute'} ${fmt(Math.abs(nums[cur]))}.` : `Total : ${fmt(total)}`);
   };
   const sb = new Soroban(host, {rods, value:0, labels:true, digits:true, onChange:v => {
     if (playing || k >= nums.length) return;
@@ -1071,7 +1267,7 @@ function flashPractice(nums){
       k++; drawChips(); list.hidden = true;
       if (k === nums.length){
         sb.lock(true); fb.className = 'fb good';
-        fb.textContent = fr(`Bravo ! ${nums.map(fmt).join(' + ')} = ${fmt(total)}. Relance un flash quand tu veux.`);
+        fb.textContent = fr(`Bravo ! ${flashExpr(nums)} = ${fmt(total)}. Relance un flash quand tu veux.`);
       } else {
         fb.className = 'fb good'; fb.textContent = fr(`Oui, ${fmt(sums[k])}. Au suivant !`);
       }
@@ -1081,10 +1277,10 @@ function flashPractice(nums){
   const hintBtn = h('button',{class:'btn', type:'button', onclick:() => {
     if (playing || k >= nums.length) return;
     run++; sb.setValue(sums[k]); sb.lock(false);
-    const p = makePlan(sums[k], '+', nums[k], rods);
+    const p = stepPlan(k);
     renderPlanList(list, p.groups, -1); list.hidden = false;
     sb.highlight(p.groups.length ? p.groups[0].pos : null);
-    fb.className = 'fb'; fb.textContent = fr(`Pour ajouter ${fmt(nums[k])} à ${fmt(sums[k])} :`);
+    fb.className = 'fb'; fb.textContent = fr(nums[k] < 0 ? `Pour enlever ${fmt(-nums[k])} à ${fmt(sums[k])} :` : `Pour ajouter ${fmt(nums[k])} à ${fmt(sums[k])} :`);
   }}, 'Indice');
   const showBtn = h('button',{class:'btn', type:'button', onclick: async () => {
     if (playing) return;
@@ -1093,11 +1289,11 @@ function flashPractice(nums){
     list.hidden = false; fb.className = 'fb'; fb.textContent = 'Regarde bien…';
     for (let i=0; i<nums.length; i++){
       drawChips(i);
-      const ok = await playPlan(sb, makePlan(sums[i], '+', nums[i], rods), list, alive(my));
+      const ok = await playPlan(sb, stepPlan(i), list, alive(my));
       if (!ok) return;
     }
     drawChips(nums.length);
-    fb.textContent = fr(`${nums.map(fmt).join(' + ')} = ${fmt(total)}.`);
+    fb.textContent = fr(`${flashExpr(nums)} = ${fmt(total)}.`);
     await wait(1600);
     if (!alive(my)()) return;
     playing = false; k = 0; sb.setValue(0); sb.highlight(null); sb.lock(false); drawChips(); list.hidden = true;
@@ -1111,7 +1307,7 @@ function flashPractice(nums){
   drawChips();
   el.append(
     h('h3',{class:'practice-title'}, 'On le refait sur le boulier'),
-    h('p',{class:'muted'}, `Pose d'abord ${fmt(nums[0])}, puis ajoute les autres nombres un par un. Le nombre suivant s'allume dès que le boulier est juste.`),
+    h('p',{class:'muted'}, `Pose d'abord ${fmt(nums[0])}, puis ${nums.some(n => n < 0) ? 'ajoute ou enlève' : 'ajoute'} les autres nombres un par un. Le nombre suivant s'allume dès que le boulier est juste.`),
     chips,
     h('div',{class:'round-grid'}, host, h('div',{class:'round-side'}, totalEl, h('div',{class:'btns'}, hintBtn, showBtn, resetBtn), fb, list)));
   return el;
@@ -1119,7 +1315,7 @@ function flashPractice(nums){
 
 /* --- Flash anzan --- */
 function makeFlash(){
-  const opt = {digits:1, count:3, speed:1300};
+  const opt = {digits:1, count:3, speed:1300, minus:false};
   let nums=[], tries=0, wins=0, running=false;
   const seg = (label, key, options) => {
     const g = h('div',{class:'chips', role:'group', 'aria-label':label});
@@ -1136,7 +1332,7 @@ function makeFlash(){
   const practiceHost = h('div',{class:'practice-host'});
   const kp = makeKeypad({maxLen:4, label:'Le total', onSubmit:v => {
     kp.enable(false); tries++;
-    const total = nums.reduce((a,b) => a+b, 0), expr = nums.map(fmt).join(' + ');
+    const total = nums.reduce((a,b) => a+b, 0), expr = flashExpr(nums);
     if (v===total){ wins++; result.className='fb good'; result.textContent = fr(`Bravo ! ${expr} = ${fmt(total)}`); practiceHost.replaceChildren(); }
     else {
       result.className='fb bad'; result.textContent = fr(`Le total était ${fmt(total)} : ${expr}. Tu as répondu ${fmt(v)}.`);
@@ -1147,21 +1343,12 @@ function makeFlash(){
     startBtn.disabled = false; startBtn.textContent = 'Encore';
   }});
   kp.enable(false);
-  const gen = () => {
-    const out=[]; let prev=-1;
-    const lo = opt.digits===1 ? 1 : 10, hi = opt.digits===1 ? 9 : 99;
-    while (out.length < opt.count){ const n = rand(lo,hi); if (n!==prev){ out.push(n); prev=n; } }
-    return out;
-  };
   startBtn.addEventListener('click', async () => {
     if (running) return;
     running = true; startBtn.disabled = true; kp.enable(false); kp.clear(); result.textContent=''; result.className='fb';
     practiceHost.replaceChildren();
-    nums = gen();
-    for (const c of ['3','2','1']){ numEl.className='flash-num count'; numEl.textContent=c; await wait(550); }
-    numEl.textContent=''; await wait(300);
-    for (const n of nums){ numEl.className='flash-num'; numEl.textContent = fmt(n); await wait(opt.speed); numEl.textContent=''; await wait(180); }
-    numEl.className='flash-num msg'; numEl.textContent='Combien ?';
+    nums = genFlash(opt);
+    await runFlash(numEl, nums, opt.speed);
     running = false; kp.enable(true); kp.clear();
   });
   return h('section',{class:'game', 'aria-label':'Flash anzan'},
@@ -1170,8 +1357,64 @@ function makeFlash(){
     h('div',{class:'flash-set'},
       seg('Chiffres', 'digits', [[1,'1 chiffre'],[2,'2 chiffres']]),
       seg('Nombres', 'count', [[3,'3'],[5,'5'],[8,'8']]),
-      seg('Vitesse', 'speed', [[1300,'Lente'],[900,'Moyenne'],[600,'Rapide']])),
+      seg('Vitesse', 'speed', [[1300,'Lente'],[900,'Moyenne'],[600,'Rapide']]),
+      seg('Calculs', 'minus', [[false,'Additions'],[true,'+ et ' + MINUS]])),
     h('div',{class:'flash-row'}, h('div',{class:'round-side'}, screen, h('div',{class:'btns'}, startBtn), result, tally), kp.el),
+    practiceHost);
+}
+
+/* --- Le défi qui ouvre la multiplication et la division --- */
+const DEFI = {digits:2, count:5, minus:true, speed:900, need:3};
+function makeChallenge(){
+  let nums = [], running = false;
+  const numEl = h('span',{class:'flash-num msg'}, 'Prêt ?');
+  const screen = h('div',{class:'flash-screen', 'aria-live':'off'}, numEl);
+  const result = h('p',{class:'fb', 'aria-live':'polite'});
+  const status = h('div',{class:'defi-status'});
+  const startBtn = h('button',{class:'btn primary', type:'button'}, 'Relever le défi');
+  const practiceHost = h('div',{class:'practice-host'});
+  const drawStatus = () => {
+    const d = Store.cur() ? Store.defi() : null;
+    if (!d){ status.replaceChildren(h('p',{class:'muted'}, "Choisis ton prénom en haut de l'étape : sans prénom, le défi ne peut pas être gardé.")); return; }
+    if (d.done){
+      status.replaceChildren(h('p',{class:'fb good'}, 'Défi réussi : les étapes 8 et 9 sont ouvertes.'),
+        h('button',{class:'btn primary', type:'button', onclick:() => go('etape-8')}, 'Aller à « Multiplier » →'));
+      return;
+    }
+    status.replaceChildren(
+      h('span',{class:'pbeads defi-beads', 'aria-hidden':'true'}, Array.from({length:DEFI.need}, (_,i) => h('span',{class: i < d.streak ? 'ok' : ''}))),
+      h('span',{class:'muted'}, `${d.streak} réussi${d.streak>1?'s':''} d'affilée sur ${DEFI.need}`));
+  };
+  const kp = makeKeypad({maxLen:4, label:'Le total', onSubmit:v => {
+    kp.enable(false);
+    const total = nums.reduce((a,b) => a+b, 0), expr = flashExpr(nums), d = Store.cur() ? Store.defi() : null;
+    if (v === total){
+      result.className='fb good'; result.textContent = fr(`Juste ! ${expr} = ${fmt(total)}`); practiceHost.replaceChildren();
+      if (d && !d.done){ d.streak++; if (d.streak >= DEFI.need) d.done = true; Store.save(); }
+    } else {
+      result.className='fb bad'; result.textContent = fr(`Le total était ${fmt(total)} : ${expr}. Tu as répondu ${fmt(v)}. La série repart à zéro.`);
+      if (d && !d.done){ d.streak = 0; Store.save(); }
+      practiceHost.replaceChildren(flashPractice(nums.slice()));
+    }
+    numEl.className='flash-num'; numEl.textContent = fmt(total);
+    drawStatus(); refreshTotal();
+    startBtn.disabled = false; startBtn.textContent = 'Encore';
+  }});
+  kp.enable(false);
+  startBtn.addEventListener('click', async () => {
+    if (running) return;
+    running = true; startBtn.disabled = true; kp.enable(false); kp.clear(); result.textContent=''; result.className='fb';
+    practiceHost.replaceChildren();
+    nums = genFlash(DEFI);
+    await runFlash(numEl, nums, DEFI.speed);
+    running = false; kp.enable(true); kp.clear();
+  });
+  drawStatus();
+  return h('section',{class:'game defi', id:'defi', 'aria-label':'Le défi des multiplications'},
+    h('div',{class:'game-head'}, h('div',{}, h('p',{class:'eyebrow'}, 'Défi'), h('h2',{class:'game-title'}, 'Le défi des multiplications'))),
+    h('p',{class:'game-intro', html:"Pour ouvrir les étapes 8 et 9, réussis <b>3 flashs d'affilée</b> : <b>5 nombres à 2 chiffres</b>, avec des additions et des soustractions, à vitesse moyenne. Un nombre précédé de « − » est à enlever. Une erreur, et la série repart à zéro."}),
+    status,
+    h('div',{class:'flash-row'}, h('div',{class:'round-side'}, screen, h('div',{class:'btns'}, startBtn), result), kp.el),
     practiceHost);
 }
 
@@ -1309,8 +1552,62 @@ const LESSONS = [
         intro:"Le boulier s'affiche un court instant, puis disparaît. Retrouve le nombre de mémoire.",
         setup:() => ({seq:[rand(1,9), rand(1,9), rand(11,99), rand(11,99), rand(11,99), rand(101,999), rand(101,999), rand(101,999)]}),
         round:(api, i, ctx) => photoRound(api, ctx.seq[i], i<2 ? 1500 : i<5 ? 2000 : 2500) });
-      el.append(makeFlash(),
+      el.append(makeFlash(), makeChallenge(),
         Rule("10 minutes par jour valent mieux qu'une heure le dimanche. Les additions simples de tête viennent en quelques semaines. Les grands nombres, ça prend des mois : les champions qu'on voit en vidéo s'entraînent depuis des années.", 'La vraie règle'));
+    } },
+  { id:'etape-8', lock:true, title:'Multiplier', desc:'Les tables, puis chaque résultat posé à sa place.',
+    lead:"Multiplier sur le boulier, c'est faire des additions : on ajoute les résultats des tables, chacun à sa place.",
+    render(el, nextFn){
+      el.append(
+        Block('Avant de commencer',
+          P("Il faut connaître ses <b>tables de multiplication</b>, de 2 à 9. C'est le seul calcul qu'on fait de tête : le boulier fait le reste. Si les tables ne sont pas encore sûres, commence par le jeu « Les tables », plus bas.")),
+        Block('La règle des deux tiges',
+          P("Deux chiffres multipliés donnent toujours un résultat qu'on écrit avec <b>deux chiffres</b> : 2 × 4 = <b>08</b>, 3 × 4 = <b>12</b>. Sur le boulier, chaque résultat prend donc deux tiges, côte à côte."),
+          Rule("On multiplie de <b>gauche à droite</b>. Chaque nouveau chiffre ajoute son résultat <b>une tige plus à droite</b>.")),
+        Block('Exemple : 23 × 4',
+          P("2 × 4 = 08 : comme le 2 est une dizaine, j'ajoute 08 sur les tiges c et d. Ça fait 80. Puis 3 × 4 = 12 : je l'ajoute une tige plus à droite, sur d et u. Le boulier montre 92."),
+          makeDemo([{a:23,op:'×',b:4},{a:31,op:'×',b:3},{a:47,op:'×',b:6},{a:125,op:'×',b:3}], 4),
+          P("Quand on ajoute les résultats, les petits et les grands amis reviennent : tout ce que tu as appris sert ici.")));
+      makeGame(el, { title:'Les tables', total:10, eyebrow:'Échauffement',
+        intro:"Les 5 premières questions viennent des tables de 2 à 5, les suivantes des tables de 6 à 9.",
+        setup:() => {
+          const pick = (lo,hi,n) => { const seen = new Set(), out = []; while (out.length < n){ const a = rand(lo,hi), b = rand(2,9), k = a+'x'+b; if (!seen.has(k)){ seen.add(k); out.push([a,b]); } } return out; };
+          return {seq:[...pick(2,5,5), ...pick(6,9,5)]};
+        },
+        round:(api, i, ctx) => tableRound(api, ctx.seq[i][0], ctx.seq[i][1]) });
+      makeGame(el, { title:'Multiplications', total:8, saveAs:'etape-8', onNext:nextFn,
+        intro:"Le boulier part de zéro. Pose chaque résultat des tables à sa place, de gauche à droite.",
+        setup:() => ({seen:new Set()}),
+        round:(api, i, ctx) => {
+          const cfg = i<4 ? [[11,49],[2,5]] : i<7 ? [[12,99],[3,9]] : [[101,399],[2,9]];
+          let p, t = 0;
+          do { const a = rand(...cfg[0]), m = rand(...cfg[1]); p = multPlan(a, m, String(a).length+1); t++; }
+          while ((ctx.seen.has(p.a+'x'+p.b) || !p.ok) && t < 200);
+          ctx.seen.add(p.a+'x'+p.b);
+          guidedRound(api, p);
+        } });
+    } },
+  { id:'etape-9', lock:true, title:'Diviser', desc:"Chercher combien de fois ça rentre, et l'enlever.",
+    lead:"Diviser, c'est l'inverse de multiplier : on cherche combien de fois un nombre rentre, et on enlève les résultats des tables.",
+    render(el, nextFn){
+      el.append(
+        Block(null,
+          P("Pour diviser, le boulier montre le grand nombre au départ. On avance de <b>gauche à droite</b>, et à chaque tige on se pose la même question : <b>combien de fois</b> le petit nombre rentre-t-il ?")),
+        Block('Exemple : 84 ÷ 4',
+          P("Sur la tige des dizaines, il y a 8. Combien de fois 4 dans 8 ? <b>2 fois</b>. J'écris 2 au résultat et j'enlève 2 × 4 = 8 des dizaines. Il reste 4. Combien de fois 4 dans 4 ? <b>1 fois</b>. J'écris 1 et j'enlève 4. Le boulier est vide : 84 ÷ 4 = <b>21</b>."),
+          P("Parfois, il reste quelque chose. 72 ÷ 3 : 3 rentre 2 fois dans 7, j'enlève 6 dizaines, il reste 1 dizaine. Elle se colle aux unités : on regarde maintenant 12. 3 rentre 4 fois dans 12. Résultat : 24."),
+          makeDemo([{a:84,op:'÷',b:4},{a:72,op:'÷',b:3},{a:96,op:'÷',b:8},{a:612,op:'÷',b:3}], 3),
+          Rule("Quand la division tombe juste, le boulier est <b>vide</b> à la fin. Le résultat, c'est la suite des chiffres que tu as écrits.")));
+      makeGame(el, { title:'Divisions', total:8, saveAs:'etape-9', onNext:nextFn,
+        intro:"Pour chaque tige : choisis combien de fois ça rentre, puis enlève le résultat sur le boulier.",
+        setup:() => ({seen:new Set()}),
+        round:(api, i, ctx) => {
+          const cfg = i<3 ? [[11,33],[2,3]] : i<6 ? [[12,99],[2,9]] : [[101,300],[2,3]];
+          let Q, d, D, t = 0;
+          do { Q = rand(...cfg[0]); d = rand(...cfg[1]); D = Q*d; t++; } while ((D > 999 || ctx.seen.has(D+'/'+d)) && t < 200);
+          ctx.seen.add(D+'/'+d);
+          divRound(api, D, d);
+        } });
     } }
 ];
 
@@ -1329,10 +1626,12 @@ const ASIA = {
   'etape-4': {d:'3 à 4 semaines', t:"C'est la première vraie difficulté. On s'entraîne jusqu'à ne plus réfléchir : la main sait toute seule."},
   'etape-5': {d:'4 à 6 semaines', t:"C'est l'étape la plus longue du niveau 1. Les grands amis demandent du temps."},
   'etape-6': {d:'3 à 4 semaines', t:"Souvent apprise en même temps que l'addition. À la fin de cette étape, le niveau 1 est terminé : environ 3 mois dans les écoles UCMAS en Inde, 4 à 5 mois chez UCMAS Suisse avec un cours par semaine."},
-  'etape-7': {d:'3 à 5 mois', t:"C'est tout le niveau 2 : additionner de tête une suite de 10 à 15 nombres à 1 chiffre. Il faut ensuite à peu près un an de plus pour faire pareil avec des nombres à 2 chiffres."}
+  'etape-7': {d:'3 à 5 mois', t:"C'est tout le niveau 2 : additionner de tête une suite de 10 à 15 nombres à 1 chiffre. Il faut ensuite à peu près un an de plus pour faire pareil avec des nombres à 2 chiffres."},
+  'etape-8': {d:'environ 6 mois', t:"Dans les écoles UCMAS, la multiplication arrive au niveau 4, après 9 à 13 mois de cours, quand on sait déjà calculer de tête avec des nombres à 2 chiffres. Il faut connaître ses tables."},
+  'etape-9': {d:'3 à 5 mois', t:"La division arrive au niveau 6 : après environ 15 mois de cours au rythme rapide, et près de 2 ans avec un cours par semaine."}
 };
 /* Où en serait un enfant de ces écoles au début de chaque étape (en mois de cours, estimation) */
-const STEP_MONTH = [0, 0.35, 0.7, 1.4, 2.2, 3.35, 4.15], ALL_DONE_MONTH = 8;
+const STEP_MONTH = [0, 0.35, 0.7, 1.4, 2.2, 3.35, 4.15, 11, 19], ALL_DONE_MONTH = 22;
 const monthsText = m => m < 1 ? "quelques semaines" : m < 12 ? `environ ${String(Math.round(m*2)/2).replace('.',',')} mois` : `environ ${Math.round(m/12)} an${m>=24?'s':''}`;
 function playerMonth(id){
   const p = Store.peek(id); if (!p || !p.lesson) return null;
@@ -1346,7 +1645,9 @@ function paceSection(){
     {label:'Étapes 1 à 6', sub:'Sur le boulier, nombres à 1 chiffre', lvl:'Niveau 1', fast:[0,3], slow:[0,4.5]},
     {label:'Étape 7', sub:'De tête, nombres à 1 chiffre', lvl:'Niveau 2', fast:[3,6], slow:[4.5,9]},
     {label:'Nombres à 2 chiffres', sub:"Sur le boulier, puis de tête. Pas encore dans l'école du boulier", lvl:'Niveaux 3 et 4', fast:[6,12], slow:[9,18]},
-    {label:'3 chiffres, multiplications, divisions', sub:'Puis les décimaux', lvl:'Niveaux 5 à 9', fast:[12,27], slow:[18,45]}
+    {label:'Étape 8 : multiplier', sub:"D'abord 2 chiffres × 1 chiffre", lvl:'Niveaux 4 et 5', fast:[9,15], slow:[13.5,22.5]},
+    {label:'Étape 9 : diviser', sub:'3 chiffres ÷ 1 chiffre', lvl:'Niveau 6', fast:[15,18], slow:[22.5,27]},
+    {label:'Plus grands nombres, décimaux', sub:'Pas encore dans l\'école du boulier', lvl:'Niveaux 7 à 9', fast:[18,27], slow:[27,45]}
   ];
   const ticks = [[0,'0'],[3,'3 mois'],[6,'6 mois'],[12,'1 an'],[24,'2 ans'],[48,'4 ans']];
   const tickCls = m => 'tl-tick' + (m===3 ? ' tl-tick-minor' : '');
@@ -1373,7 +1674,7 @@ function paceSection(){
     chart.append(h('div',{class:'tl-row'}, h('div',{class:'tl-label'}, h('b',{}, 'Vous')), h('div',{class:'tl-pins', style:`height:${height}px`}, pins)));
     who = h('ul',{class:'tl-who'}, marks.map(o => h('li',{},
       h('span',{class:'pbead'+(o.i%2?' alt':''), 'aria-hidden':'true'}, o.pl.name.charAt(0)),
-      h('span',{}, h('b',{}, o.pl.name), ' : ', o.pos.allDone ? 'les 7 étapes réussies' : `étape ${o.pos.step}`,
+      h('span',{}, h('b',{}, o.pl.name), ' : ', o.pos.allDone ? `les ${LESSONS.length} étapes réussies` : `étape ${o.pos.step}`,
         `, comme un enfant de ces écoles après ${monthsText(o.pos.m)} de cours.`))));
   }
   return h('section',{class:'pace'},
@@ -1390,6 +1691,10 @@ function paceSection(){
 }
 
 const view = $('#view');
+const isLocked = l => !!l.lock && !Store.defiDone();
+let pendingAnchor = null;
+function goDefi(){ pendingAnchor = 'defi'; go('etape-7'); }
+const LOCK_SVG = '<svg class="lock-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>';
 const MAXSTARS = LESSONS.length*3;
 const playerIdx = id => PLAYERS.findIndex(p => p.id===id);
 let pendingResume = false, suppressScrollSave = false, scrollTimer = null;
@@ -1454,15 +1759,17 @@ function renderHome(){
       h('div',{class:'btns'}, h('button',{class:'btn', type:'button', onclick:() => { sb.setValue(0); if (showDigits) num.textContent='0'; }}, 'Tout effacer'), toggle)));
   const curP = Store.cur() ? Store.peek(Store.cur()) : null;
   const steps = h('ol',{class:'steps'}, LESSONS.map((l,i) => {
-    const st = Store.stars(l.id), here = curP && curP.lesson===l.id;
-    return h('li',{}, h('button',{class:'step'+(st?' done':''), type:'button', onclick:() => go(l.id)},
+    const st = Store.stars(l.id), here = curP && curP.lesson===l.id, locked = isLocked(l);
+    const title = h('span',{class:'step-title'}, l.title);
+    if (locked) title.insertAdjacentHTML('beforeend', ' ' + LOCK_SVG);
+    return h('li',{}, h('button',{class:'step'+(st?' done':'')+(locked?' locked':''), type:'button', onclick:() => go(l.id)},
       h('span',{class:'step-bead', 'aria-hidden':'true'}, i+1),
-      h('span',{}, here ? h('span',{class:'here'}, 'Tu en es là') : null, h('span',{class:'step-title'}, l.title), h('span',{class:'step-desc'}, l.desc)),
+      h('span',{}, here ? h('span',{class:'here'}, 'Tu en es là') : null, title, h('span',{class:'step-desc'}, locked ? "Fermée : réussis d'abord le défi de l'étape 7." : l.desc)),
       starRow(st)));
   }));
   const path = h('section',{class:'path col'},
     h('h2',{}, 'Le parcours'),
-    h('p',{class:'sub'}, "Sept étapes, dans l'ordre, de la première perle au calcul les yeux fermés. Tu peux revenir à n'importe quelle étape si tu as oublié."),
+    h('p',{class:'sub'}, "Neuf étapes, dans l'ordre, de la première perle à la division. Tu peux revenir à n'importe quelle étape si tu as oublié."),
     steps,
     paceSection(),
     h('div',{class:'facts'},
@@ -1473,7 +1780,7 @@ function renderHome(){
 }
 function stepper(i){
   return h('nav',{class:'lstep', 'aria-label':'Aller à une étape'}, LESSONS.map((x,k) =>
-    h('button',{type:'button', class: Store.stars(x.id) ? 'done' : '', 'aria-current': k===i ? 'step' : null, 'aria-label':`Étape ${k+1} : ${x.title}`, title:x.title, onclick:() => go(x.id)}, h('span',{}, k+1))));
+    h('button',{type:'button', class: (Store.stars(x.id) ? 'done' : '') + (isLocked(x) ? ' locked' : ''), 'aria-current': k===i ? 'step' : null, 'aria-label':`Étape ${k+1} : ${x.title}`, title:x.title, onclick:() => go(x.id)}, h('span',{}, k+1))));
 }
 function renderLesson(l){
   curLessonId = l.id; gameSeq = 0;
@@ -1498,7 +1805,17 @@ function renderLesson(l){
       }}, pl.name)))));
   }
   view.replaceChildren(el);
-  l.render(el, nextFn);
+  if (isLocked(l)){
+    const box = h('div',{class:'lockbox'},
+      h('h2',{class:'h2'}, 'Cette étape est fermée'),
+      h('p',{html:"Pour l'ouvrir, réussis d'abord <b>le défi des multiplications</b>, à la fin de l'étape 7 : 3 flashs d'affilée de 5 nombres à 2 chiffres, avec des additions et des soustractions."}),
+      h('p',{class:'muted'}, "C'est comme dans les écoles d'Asie : on ne commence à multiplier qu'une fois qu'on sait calculer de tête avec des nombres à 2 chiffres."),
+      h('div',{class:'btns'}, h('button',{class:'btn primary', type:'button', onclick:goDefi}, 'Aller au défi')));
+    box.insertAdjacentHTML('afterbegin', LOCK_SVG);
+    el.append(box);
+  } else {
+    l.render(el, nextFn);
+  }
   el.append(h('div',{class:'lesson-foot'},
     i>0 ? h('button',{class:'btn', type:'button', onclick:() => go(LESSONS[i-1].id)}, `← ${LESSONS[i-1].title}`) : h('span'),
     nextL ? h('button',{class:'btn primary', type:'button', onclick:nextFn}, `${nextL.title} →`) : h('button',{class:'btn primary', type:'button', onclick:() => go('home')}, "Retour à l'accueil")));
@@ -1519,7 +1836,15 @@ function show(route){
     const p = Store.player();
     const y = resume && p && p.lesson===l.id ? (p.scroll || 0) : 0;
     if (p && p.lesson !== l.id){ p.lesson = l.id; p.scroll = 0; Store.save(); }
-    renderLesson(l); refreshTotal(); restoreScroll(y);
+    renderLesson(l); refreshTotal();
+    const anchor = pendingAnchor && document.getElementById(pendingAnchor); pendingAnchor = null;
+    if (anchor){ suppressScrollSave = true; anchor.scrollIntoView({block:'start'}); setTimeout(() => { suppressScrollSave = false; }, 300); }
+    else restoreScroll(y);
+  } else if (route === 'ouvrir-les-etapes'){
+    /* Ouverture parent : #ouvrir-les-etapes ouvre les étapes 8 et 9 pour le joueur choisi */
+    const d = Store.cur() ? Store.defi() : null;
+    if (d){ d.done = true; Store.save(); }
+    location.hash = '';
   } else {
     renderHome(); refreshTotal(); window.scrollTo(0,0);
   }
