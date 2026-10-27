@@ -147,6 +147,50 @@ button{font:inherit; color:inherit}
 .stars.lg .star{width:44px; height:44px}
 
 .facts{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:28px; margin-top:56px; padding-top:28px; border-top:2px solid var(--line)}
+
+/* ---------- rythme des écoles d'Asie ---------- */
+.pace{margin-top:56px; display:grid; gap:14px}
+.pace h2{font-size:clamp(1.5rem, 3.2vw, 2rem)}
+.pace .sub{color:var(--muted); max-width:65ch}
+.tl-fig{display:grid; gap:14px}
+.tl-legend{display:flex; flex-wrap:wrap; gap:8px 20px; font-size:.88rem; color:var(--muted)}
+.tl-legend span{display:inline-flex; align-items:center; gap:8px}
+.tl-legend i{display:inline-block; width:26px; height:10px; border-radius:5px}
+.tl-legend i.fast, .tl-bar.fast{background:var(--jade)}
+.tl-legend i.slow, .tl-bar.slow{background:transparent; border:2px solid var(--earth)}
+.tl{display:grid; gap:12px}
+.tl-row{display:grid; grid-template-columns:minmax(0,15rem) minmax(0,1fr); gap:6px 16px; align-items:center}
+.tl-label{display:grid; font-size:.9rem; line-height:1.3}
+.tl-label span{color:var(--muted); font-size:.8rem}
+.tl-track{position:relative; height:30px; border-left:2px solid var(--line); background:linear-gradient(var(--line), var(--line)) 0 50%/100% 1px no-repeat}
+.tl-bar{position:absolute; border-radius:6px; min-width:6px}
+.tl-bar.fast{top:3px; height:11px}
+.tl-bar.slow{top:16px; height:11px}
+.tl-axis{position:relative; height:20px; border-left:2px solid transparent}
+.tl-tick{position:absolute; top:0; transform:translateX(-50%); font-size:.75rem; color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums}
+.tl-tick:first-child{transform:none}
+.tl-tick:last-child{transform:translateX(-100%)}
+.tl-pins{position:relative; border-left:2px solid var(--line)}
+.tl-pin{position:absolute; transform:translateX(-50%); width:34px; height:21px; display:grid; place-items:center; font:800 .8rem var(--f-display); color:#3A2205;
+  clip-path:polygon(0 50%, 28% 0, 72% 0, 100% 50%, 72% 100%, 28% 100%);
+  background:linear-gradient(180deg, var(--earth-hi), var(--earth) 52%, var(--earth-lo))}
+.tl-pin.alt{background:linear-gradient(180deg, var(--sky-hi), var(--sky) 52%, var(--sky-lo)); color:#fff}
+.tl-who{list-style:none; margin:0; padding:10px 0 0; border-top:1px solid var(--line); display:grid; gap:8px; font-size:.92rem}
+.tl-who li{display:flex; align-items:center; gap:10px}
+.tl-who .pbead{width:34px; height:20px; font-size:.8rem}
+.pace-notes{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:24px; margin-top:8px}
+.pace-notes h3{font-size:1.1rem; margin-bottom:6px}
+.pace-notes p{font-size:.95rem; color:var(--muted)}
+.asia{display:flex; gap:12px; align-items:flex-start; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:12px 16px; max-width:65ch}
+.asia-ico{flex:none; width:22px; height:22px; margin-top:2px}
+.asia-ico circle, .asia-ico path{fill:none; stroke:var(--jade); stroke-width:2; stroke-linecap:round}
+.asia-label{font-weight:700}
+@media (max-width: 520px){ .tl-tick-minor{display:none} }
+@media (max-width: 820px){
+  .tl-row{grid-template-columns:minmax(0,1fr)}
+  .tl-axis-row .tl-label{display:none}
+  .pace-notes{grid-template-columns:minmax(0,1fr); gap:16px}
+}
 .facts h3{font-size:1.15rem; margin-bottom:8px}
 .facts p{font-size:.97rem; color:var(--muted)}
 .facts p b{color:var(--ink)}
@@ -1273,6 +1317,78 @@ const LESSONS = [
 /* =========================================================
    Vues
    ========================================================= */
+/* =========================================================
+   Le rythme des écoles d'Asie (repères)
+   Niveaux : UCMAS (3 mois par niveau ; UCMAS Suisse : 4 à 5 mois, un cours par semaine).
+   Le détail par étape est une estimation qui répartit le niveau 1.
+   ========================================================= */
+const ASIA = {
+  'etape-1': {d:'1 à 2 semaines', t:"Ce sont les toutes premières séances du niveau 1. Dans ces écoles, les enfants commencent en général entre 5 et 7 ans."},
+  'etape-2': {d:'1 à 2 semaines', t:"On est toujours au tout début du niveau 1."},
+  'etape-3': {d:'2 à 4 semaines', t:"Sur le boulier, avec des nombres à 1 chiffre. On répète beaucoup, avec des suites qui vont jusqu'à 6 nombres."},
+  'etape-4': {d:'3 à 4 semaines', t:"C'est la première vraie difficulté. On s'entraîne jusqu'à ne plus réfléchir : la main sait toute seule."},
+  'etape-5': {d:'4 à 6 semaines', t:"C'est l'étape la plus longue du niveau 1. Les grands amis demandent du temps."},
+  'etape-6': {d:'3 à 4 semaines', t:"Souvent apprise en même temps que l'addition. À la fin de cette étape, le niveau 1 est terminé : environ 3 mois dans les écoles UCMAS en Inde, 4 à 5 mois chez UCMAS Suisse avec un cours par semaine."},
+  'etape-7': {d:'3 à 5 mois', t:"C'est tout le niveau 2 : additionner de tête une suite de 10 à 15 nombres à 1 chiffre. Il faut ensuite à peu près un an de plus pour faire pareil avec des nombres à 2 chiffres."}
+};
+/* Où en serait un enfant de ces écoles au début de chaque étape (en mois de cours, estimation) */
+const STEP_MONTH = [0, 0.35, 0.7, 1.4, 2.2, 3.35, 4.15], ALL_DONE_MONTH = 8;
+const monthsText = m => m < 1 ? "quelques semaines" : m < 12 ? `environ ${String(Math.round(m*2)/2).replace('.',',')} mois` : `environ ${Math.round(m/12)} an${m>=24?'s':''}`;
+function playerMonth(id){
+  const p = Store.peek(id); if (!p || !p.lesson) return null;
+  const allDone = LESSONS.every(l => (p.stars[l.id]||0) > 0);
+  const idx = LESSONS.findIndex(l => l.id===p.lesson);
+  return {m: allDone ? ALL_DONE_MONTH : STEP_MONTH[Math.max(0,idx)], step: idx+1, allDone};
+}
+function paceSection(){
+  const MAX = 48, x = m => Math.sqrt(m/MAX)*100;   // échelle « racine » : les premiers mois restent lisibles
+  const rows = [
+    {label:'Étapes 1 à 6', sub:'Sur le boulier, nombres à 1 chiffre', lvl:'Niveau 1', fast:[0,3], slow:[0,4.5]},
+    {label:'Étape 7', sub:'De tête, nombres à 1 chiffre', lvl:'Niveau 2', fast:[3,6], slow:[4.5,9]},
+    {label:'Nombres à 2 chiffres', sub:"Sur le boulier, puis de tête. Pas encore dans l'école du boulier", lvl:'Niveaux 3 et 4', fast:[6,12], slow:[9,18]},
+    {label:'3 chiffres, multiplications, divisions', sub:'Puis les décimaux', lvl:'Niveaux 5 à 9', fast:[12,27], slow:[18,45]}
+  ];
+  const ticks = [[0,'0'],[3,'3 mois'],[6,'6 mois'],[12,'1 an'],[24,'2 ans'],[48,'4 ans']];
+  const tickCls = m => 'tl-tick' + (m===3 ? ' tl-tick-minor' : '');
+  const bar = (r, cls) => h('span',{class:'tl-bar '+cls, style:`left:${x(r[0])}%; width:${x(r[1])-x(r[0])}%`});
+  const chart = h('div',{class:'tl'},
+    rows.map(r => h('div',{class:'tl-row'},
+      h('div',{class:'tl-label'}, h('b',{}, r.label), h('span',{}, `${r.lvl} · ${r.sub}`)),
+      h('div',{class:'tl-track', role:'img', 'aria-label':`${r.label} : de ${r.fast[0]} à ${r.fast[1]} mois au rythme rapide, de ${r.slow[0]} à ${r.slow[1]} mois au rythme d'un cours par semaine`},
+        bar(r.fast,'fast'), bar(r.slow,'slow')))),
+    h('div',{class:'tl-row tl-axis-row'}, h('div',{class:'tl-label'}),
+      h('div',{class:'tl-axis', 'aria-hidden':'true'}, ticks.map(([m,t]) => h('span',{class:tickCls(m), style:`left:${x(m)}%`}, t)))));
+  // Les joueurs de cet appareil, placés sur la frise
+  const marks = PLAYERS.map((pl,i) => ({pl, i, pos:playerMonth(pl.id)})).filter(o => o.pos);
+  let who = null;
+  if (marks.length){
+    const lanes = [];   // dernière position occupée dans chaque ligne, pour que les perles ne se chevauchent pas
+    const pins = marks.slice().sort((a,b) => a.pos.m - b.pos.m).map(o => {
+      const px = x(o.pos.m);
+      let k = lanes.findIndex(last => px - last >= 13);
+      if (k < 0){ k = lanes.length; lanes.push(px); } else lanes[k] = px;
+      return h('span',{class:'tl-pin'+(o.i%2?' alt':''), style:`left:${px}%; top:${k*24}px`, title:o.pl.name}, o.pl.name.charAt(0));
+    });
+    const height = lanes.length*24;
+    chart.append(h('div',{class:'tl-row'}, h('div',{class:'tl-label'}, h('b',{}, 'Vous')), h('div',{class:'tl-pins', style:`height:${height}px`}, pins)));
+    who = h('ul',{class:'tl-who'}, marks.map(o => h('li',{},
+      h('span',{class:'pbead'+(o.i%2?' alt':''), 'aria-hidden':'true'}, o.pl.name.charAt(0)),
+      h('span',{}, h('b',{}, o.pl.name), ' : ', o.pos.allDone ? 'les 7 étapes réussies' : `étape ${o.pos.step}`,
+        `, comme un enfant de ces écoles après ${monthsText(o.pos.m)} de cours.`))));
+  }
+  return h('section',{class:'pace'},
+    h('h2',{}, "Le rythme des écoles d'Asie"),
+    h('p',{class:'sub'}, "Pour te situer : voici le temps que prennent les écoles de calcul mental au boulier, pour des enfants qui commencent vers 5 à 7 ans, avec un cours par semaine et des devoirs."),
+    h('div',{class:'fig tl-fig'},
+      h('div',{class:'tl-legend'}, h('span',{}, h('i',{class:'fast'}), 'Rythme rapide (3 mois par niveau)'), h('span',{}, h('i',{class:'slow'}), 'Un cours par semaine (4 à 5 mois par niveau)')),
+      chart, who),
+    h('div',{class:'pace-notes'},
+      h('div',{}, h('h3',{}, 'Au Japon'), h('p',{html:"On passe des grades, du 10<sup>e</sup> kyu (débutant) au 1<sup>er</sup> kyu, puis les dan. Avec 2 cours par semaine depuis le CP et sans devoirs, un enfant est vers le 8<sup>e</sup> kyu à 7 ans, le 6<sup>e</sup> à 8 ans, le 4<sup>e</sup> à 9 ans, le 2<sup>e</sup> à 10 ans, et le 1<sup>er</sup> kyu vers 12 ans."})),
+      h('div',{}, h('h3',{}, 'En Chine'), h('p',{html:"Le zhūxīnsuàn suit le même chemin : le vrai boulier, puis le boulier imaginé, puis les doigts qui bougent dans l'air, et enfin le calcul sans bouger. Les champions s'entraînent des années : Chen Ranran a commencé à 7 ans et faisait plus d'une heure d'exercices chaque soir."})),
+      h('div',{}, h('h3',{}, 'Ce que dit la recherche'), h('p',{html:"En Inde, des enfants de 5 à 7 ans ont suivi 3 heures par semaine pendant 3 ans. Ils sont devenus nettement meilleurs en calcul que ceux qui avaient des cours de maths en plus, surtout ceux qui retenaient déjà bien les images. Aux États-Unis, après un an, les élèves de CE1 maîtrisaient mieux le boulier que ceux de CP, mais aucun ne calculait encore mieux que les autres élèves."}))),
+    h('p',{class:'small-note'}, "Durées indicatives : elles varient beaucoup d'un enfant et d'une école à l'autre. Les écoles donnent la durée des niveaux ; la répartition étape par étape est une estimation."));
+}
+
 const view = $('#view');
 const MAXSTARS = LESSONS.length*3;
 const playerIdx = id => PLAYERS.findIndex(p => p.id===id);
@@ -1348,6 +1464,7 @@ function renderHome(){
     h('h2',{}, 'Le parcours'),
     h('p',{class:'sub'}, "Sept étapes, dans l'ordre, de la première perle au calcul les yeux fermés. Tu peux revenir à n'importe quelle étape si tu as oublié."),
     steps,
+    paceSection(),
     h('div',{class:'facts'},
       h('div',{}, h('h3',{}, 'Chinois ou japonais ?'), h('p',{html:"Le boulier chinois (<b>suanpan</b>) a 2 perles en haut et 5 en bas. Le japonais (<b>soroban</b>) en a 1 et 4. C'est le soroban qu'on utilise le plus pour apprendre le calcul mental, et c'est lui qu'on apprend ici."})),
       h('div',{}, h('h3',{}, 'Comment ça s\'appelle ?'), h('p',{html:"Le calcul mental au boulier : <b>anzan</b> en japonais, <b>zhūxīnsuàn</b> (珠心算) en chinois. Tu verras aussi « méthode soroban »."})),
@@ -1366,7 +1483,12 @@ function renderLesson(l){
     h('div',{class:'lesson-nav'},
       h('button',{class:'btn ghost', type:'button', onclick:() => go('home')}, '← Accueil'),
       stepper(i)),
-    h('header',{class:'lesson-head'}, h('p',{class:'eyebrow'}, `Étape ${i+1} sur ${LESSONS.length}`), h('h1',{}, l.title), h('p',{class:'lead'}, l.lead)));
+    h('header',{class:'lesson-head'}, h('p',{class:'eyebrow'}, `Étape ${i+1} sur ${LESSONS.length}`), h('h1',{}, l.title), h('p',{class:'lead'}, l.lead)),
+    ASIA[l.id] ? h('aside',{class:'asia'},
+      h('svg',{viewBox:'0 0 24 24', class:'asia-ico', 'aria-hidden':'true'}),
+      h('div',{}, h('p',{class:'asia-label'}, `Dans les écoles d'Asie : ${ASIA[l.id].d}`), h('p',{class:'muted'}, ASIA[l.id].t))) : null);
+  const ico = el.querySelector('.asia-ico');
+  if (ico){ ico.outerHTML = '<svg class="asia-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'; }
   if (!Store.cur()){
     el.append(h('div',{class:'notice'},
       h('p',{html:"<b>Qui joue ?</b> Choisis ton prénom pour garder tes étoiles et reprendre ici la prochaine fois."}),
