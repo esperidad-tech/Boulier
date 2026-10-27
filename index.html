@@ -57,7 +57,9 @@ button{font:inherit; color:inherit}
 :focus-visible{outline:3px solid var(--jade); outline-offset:2px}
 
 /* ---------- haut de page ---------- */
-.top{display:flex; align-items:center; justify-content:space-between; gap:12px; padding-block:18px}
+.top{display:flex; align-items:center; justify-content:space-between; gap:12px; padding-block:8px 18px}
+.home-projects{display:inline-block; margin-top:14px; font-weight:700; font-size:.9rem; color:var(--muted); text-decoration:none}
+.home-projects:hover{color:var(--jade)}
 .brand{display:flex; align-items:center; gap:10px; background:none; border:0; padding:4px 0; cursor:pointer; font:700 1.15rem var(--f-display); color:var(--ink)}
 .total{display:flex; align-items:center; gap:6px; font:700 .95rem var(--f-body); color:var(--muted); font-variant-numeric:tabular-nums}
 .total .star{width:18px; height:18px}
@@ -322,6 +324,7 @@ button{font:inherit; color:inherit}
 </svg>
 
 <div class="wrap">
+  <a class="home-projects" href="https://esperidad-tech.github.io/">← Tous mes projets</a>
   <header class="top">
     <button class="brand" id="brand" type="button" aria-label="Retour au parcours"><span class="bead-ico sky"></span>L'école du boulier</button>
     <div id="who"></div>
